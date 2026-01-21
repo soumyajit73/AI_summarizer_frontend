@@ -193,6 +193,7 @@
             <h1>AI Medical Records Summarizer</h1>
             <p>Upload prescriptions and let AI generate intelligent, structured summaries.</p>
         </div>
+        
 
         <div class="left-col">
             <div class="card">
@@ -203,6 +204,25 @@
                     <input type="file" id="fileInput" class="file-input" multiple accept="image/*" onchange="updateFileStatus()">
                 </div>
                 <div id="file-count"><i class="fa-solid fa-file-circle-check"></i> <span>0</span> files selected</div>
+                <div style="margin-top: 1rem;">
+    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
+        Optional Custom Prompt
+    </label>
+    <textarea
+        id="userPrompt"
+        placeholder="Example: Focus more on medications and lab results. Ignore imaging if irrelevant."
+        style="
+            width: 100%;
+            min-height: 70px;
+            margin-top: 6px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            resize: vertical;
+        "
+    ></textarea>
+</div>
 
                 <div class="btn-container">
                     <button onclick="processDocuments()" id="btn"><i class="fa-solid fa-wand-sparkles"></i> Process Records</button>
@@ -211,6 +231,7 @@
 
                 <div id="loading"><i class="fa-solid fa-spinner fa-spin"></i> AI is analyzing... please wait</div>
             </div>
+            
 
             <div id="result" class="card result-card">
                 <h3 style="margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Clinical Summary</h3>
@@ -276,10 +297,18 @@
             document.getElementById('result').style.display = "none";
 
             const formData = new FormData();
-            formData.append("user_id", userId); 
-            for (let i = 0; i < files.length; i++) {
-                formData.append("files", files[i]);
-            }
+formData.append("user_id", userId); 
+
+for (let i = 0; i < files.length; i++) {
+    formData.append("files", files[i]);
+}
+
+// 👇 NEW: optional user prompt
+const userPrompt = document.getElementById("userPrompt").value.trim();
+if (userPrompt) {
+    formData.append("prompt", userPrompt);
+}
+
 
           try {
     const response = await fetch(RENDER_URL, { 
