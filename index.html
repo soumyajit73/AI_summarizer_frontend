@@ -319,15 +319,24 @@ if (userPrompt) {
     const data = await response.json();
     
     // ✅ FIX: Access summary directly from data if Python returns ai_data directly
-    if (data && data.summary) {
-        displayResults(data.summary, data.prediction?.message);
-    } else if (data && data.facts) {
-        // Fallback in case your Python server is still wrapping it in "facts"
-        displayResults(data.facts.summary, data.facts.prediction?.message);
-    } else {
-        console.error("Received Data:", data);
-        throw new Error("Invalid response format: Check console for data structure");
+ if (data && data.summary) {
+    displayResults(data.summary, data.prediction?.message);
+
+    // 👇 Handle unstructured AI output
+    if (
+        data.meta?.mode === "unstructured" &&
+        data.prediction?.message
+    ) {
+        document.getElementById("result").style.display = "block";
+        document.getElementById("prediction").innerText =
+            data.prediction.message;
     }
+
+} else {
+    console.error("Unexpected response:", data);
+    alert("Unexpected response from server");
+}
+
 
 } catch (error) {
     alert("Error: " + error.message);
