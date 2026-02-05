@@ -170,6 +170,8 @@
             .summary-grid { grid-template-columns: 1fr; }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
 <body>
@@ -203,7 +205,7 @@
                     <i class="fa-solid fa-cloud-arrow-up"></i>
                     <h3>Click to upload or drag and drop</h3>
                     <p style="color: var(--text-muted); font-size: 0.85rem;">Support for JPG, PNG</p>
-                    <input type="file" id="fileInput" class="file-input" multiple accept="image/*" onchange="updateFileStatus()">
+                    <input type="file" id="fileInput" class="file-input" multiple accept="image/*, .heic, .pdf" onchange="updateFileStatus()">
                 </div>
                 
                 <div id="file-count"><i class="fa-solid fa-file-circle-check"></i> <span>0</span> files selected</div>
@@ -304,36 +306,60 @@
     }
 
     // 🚀 3. PROCESSING LOGIC
-    async function processDocuments() {
-        const files = document.getElementById('fileInput').files;
-        if (!files.length) return alert("Please select files");
+   async function processDocuments() {
+    const fileInput = document.getElementById('fileInput');
+    const files = fileInput.files;
+    if (!files.length) return alert("Please select files");
 
-        document.getElementById('loading').style.display = "block";
-        document.getElementById('btn').disabled = true;
+    document.getElementById('loading').style.display = "block";
+    document.getElementById('btn').disabled = true;
 
-        const formData = new FormData();
-        formData.append("user_id", Clerk.user.id); // Uses real Clerk ID
-        for (let f of files) formData.append("files", f);
-        
-        const prompt = document.getElementById("userPrompt").value.trim();
-        if (prompt) formData.append("prompt", prompt);
+    const formData = new FormData();
+    formData.append("user_id", Clerk.user.id);
+
+    for (let file of files) {
+        const extension = file.name.split('.').pop().toLowerCase();
 
         try {
-            const res = await fetch(RENDER_URL, { method: "POST", body: formData });
-            const data = await res.json();
-
-            if (data?.summary) {
-                displayResults(data.summary, data.prediction?.message);
-            } else {
-                alert("Unexpected server response");
+            if (extension === 'heic' || extension === 'heif') {
+                // Convert HEIC Blob to JPEG Blob
+                const convertedBlob = await heic2any({
+                    blob: file,
+                    toType: "image/jpeg",
+                    quality: 0.8
+                });
+                formData.append("files", convertedBlob, file.name.replace(/\.[^/.]+$/, ".jpg"));
+            } 
+            else if (extension === 'pdf') {
+                // For testing, alert that PDF needs the Node backend or complex PDF.js logic
+                alert("PDF detected. Note: Client-side PDF-to-Image conversion is complex. Recommended to use the Node.js backend logic we built.");
+                formData.append("files", file); 
+            } 
+            else {
+                formData.append("files", file);
             }
-        } catch (e) {
-            alert("Error: " + e.message);
-        } finally {
-            document.getElementById('loading').style.display = "none";
-            document.getElementById('btn').disabled = false;
+        } catch (err) {
+            console.error("Conversion error:", err);
+            formData.append("files", file); // Fallback to original
         }
     }
+
+    const prompt = document.getElementById("userPrompt").value.trim();
+    if (prompt) formData.append("prompt", prompt);
+
+    try {
+        const res = await fetch(RENDER_URL, { method: "POST", body: formData });
+        const data = await res.json();
+        if (data?.summary) {
+            displayResults(data.summary, data.prediction?.message);
+        }
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        document.getElementById('loading').style.display = "none";
+        document.getElementById('btn').disabled = false;
+    }
+}
 
     function displayResults(summary, prediction) {
         const fill = (id, arr) => {
