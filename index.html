@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* 🎨 YOUR POLISHED CSS (From second code) */
+        /* 🎨 YOUR POLISHED CSS */
         :root {
             --primary: #0ca39a;
             --primary-dark: #088a82;
@@ -171,7 +171,7 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
 <body>
@@ -247,6 +247,26 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- 💬 NEW AGENTIC CHAT UI 💬 -->
+            <div id="ai-chat-section" style="margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.5rem; display: none;">
+                <h4 style="margin-top: 0; margin-bottom: 15px;">
+                    <i class="fa-solid fa-robot" style="color: var(--primary);"></i> Ask AI about these records
+                </h4>
+                
+                <div id="chat-box" style="height: 250px; overflow-y: auto; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem;">
+                    <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                        Chat context loaded. What would you like to know?
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="chatInput" placeholder="e.g., What dosage of Metformin am I on?" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border); font-family: inherit;">
+                    <button id="sendChatBtn" onclick="sendChatMessage()" style="background: var(--primary); color: white; padding: 0 20px; border: none; border-radius: 8px; cursor: pointer;">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <aside class="disclaimer">
@@ -261,6 +281,11 @@
 
 <script>
     const RENDER_URL = "https://ai-summarizer-iwii.onrender.com/upload-and-process";
+    const CHAT_URL = "https://ai-summarizer-iwii.onrender.com/chat-agent";
+
+    // 🧠 CHAT MEMORY (Local testing state)
+    let currentSummaryContext = null;
+    let chatHistory = [];
 
     // 🔐 1. CLERK INITIALIZATION
     window.addEventListener("load", async () => {
@@ -306,60 +331,58 @@
     }
 
     // 🚀 3. PROCESSING LOGIC
-   async function processDocuments() {
-    const fileInput = document.getElementById('fileInput');
-    const files = fileInput.files;
-    if (!files.length) return alert("Please select files");
+    async function processDocuments() {
+        const fileInput = document.getElementById('fileInput');
+        const files = fileInput.files;
+        if (!files.length) return alert("Please select files");
 
-    document.getElementById('loading').style.display = "block";
-    document.getElementById('btn').disabled = true;
+        document.getElementById('loading').style.display = "block";
+        document.getElementById('btn').disabled = true;
 
-    const formData = new FormData();
-    formData.append("user_id", Clerk.user.id);
+        const formData = new FormData();
+        formData.append("user_id", Clerk.user.id);
 
-    for (let file of files) {
-        const extension = file.name.split('.').pop().toLowerCase();
+        for (let file of files) {
+            const extension = file.name.split('.').pop().toLowerCase();
+
+            try {
+                if (extension === 'heic' || extension === 'heif') {
+                    const convertedBlob = await heic2any({
+                        blob: file,
+                        toType: "image/jpeg",
+                        quality: 0.8
+                    });
+                    formData.append("files", convertedBlob, file.name.replace(/\.[^/.]+$/, ".jpg"));
+                } 
+                else if (extension === 'pdf') {
+                    alert("PDF detected. Note: Client-side PDF-to-Image conversion is complex. Recommended to use the Node.js backend logic we built.");
+                    formData.append("files", file); 
+                } 
+                else {
+                    formData.append("files", file);
+                }
+            } catch (err) {
+                console.error("Conversion error:", err);
+                formData.append("files", file); 
+            }
+        }
+
+        const prompt = document.getElementById("userPrompt").value.trim();
+        if (prompt) formData.append("prompt", prompt);
 
         try {
-            if (extension === 'heic' || extension === 'heif') {
-                // Convert HEIC Blob to JPEG Blob
-                const convertedBlob = await heic2any({
-                    blob: file,
-                    toType: "image/jpeg",
-                    quality: 0.8
-                });
-                formData.append("files", convertedBlob, file.name.replace(/\.[^/.]+$/, ".jpg"));
-            } 
-            else if (extension === 'pdf') {
-                // For testing, alert that PDF needs the Node backend or complex PDF.js logic
-                alert("PDF detected. Note: Client-side PDF-to-Image conversion is complex. Recommended to use the Node.js backend logic we built.");
-                formData.append("files", file); 
-            } 
-            else {
-                formData.append("files", file);
+            const res = await fetch(RENDER_URL, { method: "POST", body: formData });
+            const data = await res.json();
+            if (data?.summary) {
+                displayResults(data.summary, data.prediction?.message);
             }
-        } catch (err) {
-            console.error("Conversion error:", err);
-            formData.append("files", file); // Fallback to original
+        } catch (e) {
+            alert("Error: " + e.message);
+        } finally {
+            document.getElementById('loading').style.display = "none";
+            document.getElementById('btn').disabled = false;
         }
     }
-
-    const prompt = document.getElementById("userPrompt").value.trim();
-    if (prompt) formData.append("prompt", prompt);
-
-    try {
-        const res = await fetch(RENDER_URL, { method: "POST", body: formData });
-        const data = await res.json();
-        if (data?.summary) {
-            displayResults(data.summary, data.prediction?.message);
-        }
-    } catch (e) {
-        alert("Error: " + e.message);
-    } finally {
-        document.getElementById('loading').style.display = "none";
-        document.getElementById('btn').disabled = false;
-    }
-}
 
     function displayResults(summary, prediction) {
         const fill = (id, arr) => {
@@ -375,7 +398,69 @@
 
         document.getElementById("prediction").innerText = prediction || "Summarization complete.";
         document.getElementById("result").style.display = "block";
+
+        // 🧠 SECRECY LOGIC: Save the summary into memory for the chat!
+        currentSummaryContext = summary; 
+        chatHistory = []; // Wipe old history on new upload
+        
+        // Show the chat UI and reset the box
+        document.getElementById("ai-chat-section").style.display = "block";
+        document.getElementById("chat-box").innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">Chat context loaded. What would you like to know?</div>';
     }
+
+    // 💬 AGENTIC CHAT LOGIC
+    async function sendChatMessage() {
+        const inputEl = document.getElementById("chatInput");
+        const message = inputEl.value.trim();
+        const chatBox = document.getElementById("chat-box");
+        
+        if (!message || !currentSummaryContext) return;
+
+        // 1. Show User Message in UI
+        chatBox.innerHTML += `<div style="align-self: flex-end; background: var(--primary); color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 80%;">${message}</div>`;
+        inputEl.value = "";
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // 2. Add loading animation
+        const loadingId = "load-" + Date.now();
+        chatBox.innerHTML += `<div id="${loadingId}" style="align-self: flex-start; background: #e2e8f0; color: var(--text-dark); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%;"><i class="fa-solid fa-ellipsis fa-fade"></i></div>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        try {
+            // 3. Send Payload to Python
+            const res = await fetch(CHAT_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: Clerk.user ? Clerk.user.id : "test_user",
+                    message: message,
+                    history: chatHistory,
+                    summary: currentSummaryContext
+                })
+            });
+
+            if (!res.ok) throw new Error("Network response was not ok");
+            const data = await res.json();
+            
+            // 4. Show AI Reply in UI
+            document.getElementById(loadingId).remove();
+            chatBox.innerHTML += `<div style="align-self: flex-start; background: #e2e8f0; color: var(--text-dark); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%; line-height: 1.4;">${data.reply}</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 5. Update Memory so it remembers this exchange!
+            chatHistory.push({ role: "user", content: message });
+            chatHistory.push({ role: "assistant", content: data.reply });
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById(loadingId).innerText = "❌ Connection error. Is the Python /chat-agent endpoint live?";
+        }
+    }
+
+    // Pro-tip: Let users press "Enter" to send a message
+    document.getElementById("chatInput").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") sendChatMessage();
+    });
 </script>
 
 </body>
