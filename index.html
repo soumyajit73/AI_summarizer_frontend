@@ -283,6 +283,15 @@
     const RENDER_URL = "https://ai-summarizer-iwii.onrender.com/upload-and-process";
     const CHAT_URL = "https://ai-summarizer-iwii.onrender.com/chat-agent";
 
+    const mockCuoreState = {
+        patient_profile: { age: 52, gender: "Male", known_conditions: ["Type 2 Diabetes", "Hypertension"] },
+        latest_assessments: { cuore_score: 58, metabolic_age_gap: "+4 years" },
+        active_plan: {
+            main_focus: "Stabilize morning blood sugar and reduce blood pressure.",
+            daily_tasks: ["Take Metformin 500mg with breakfast", "30-minute walk after dinner", "Log morning blood pressure"]
+        }
+    };
+
     // 🧠 CHAT MEMORY (Local testing state)
     let currentSummaryContext = null;
     let chatHistory = [];
@@ -409,25 +418,22 @@
     }
 
     // 💬 AGENTIC CHAT LOGIC
-    async function sendChatMessage() {
+   async function sendChatMessage() {
         const inputEl = document.getElementById("chatInput");
         const message = inputEl.value.trim();
         const chatBox = document.getElementById("chat-box");
         
         if (!message || !currentSummaryContext) return;
 
-        // 1. Show User Message in UI
         chatBox.innerHTML += `<div style="align-self: flex-end; background: var(--primary); color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 80%;">${message}</div>`;
         inputEl.value = "";
         chatBox.scrollTop = chatBox.scrollHeight;
 
-        // 2. Add loading animation
         const loadingId = "load-" + Date.now();
         chatBox.innerHTML += `<div id="${loadingId}" style="align-self: flex-start; background: #e2e8f0; color: var(--text-dark); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%;"><i class="fa-solid fa-ellipsis fa-fade"></i></div>`;
         chatBox.scrollTop = chatBox.scrollHeight;
 
         try {
-            // 3. Send Payload to Python
             const res = await fetch(CHAT_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -435,25 +441,24 @@
                     user_id: Clerk.user ? Clerk.user.id : "test_user",
                     message: message,
                     history: chatHistory,
-                    summary: currentSummaryContext
+                    summary: currentSummaryContext,
+                    cuore_state: mockCuoreState // 👈 WE INJECT THE MOCK DATABASE HERE!
                 })
             });
 
             if (!res.ok) throw new Error("Network response was not ok");
             const data = await res.json();
             
-            // 4. Show AI Reply in UI
             document.getElementById(loadingId).remove();
             chatBox.innerHTML += `<div style="align-self: flex-start; background: #e2e8f0; color: var(--text-dark); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%; line-height: 1.4;">${data.reply}</div>`;
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            // 5. Update Memory so it remembers this exchange!
             chatHistory.push({ role: "user", content: message });
             chatHistory.push({ role: "assistant", content: data.reply });
 
         } catch (error) {
             console.error(error);
-            document.getElementById(loadingId).innerText = "❌ Connection error. Is the Python /chat-agent endpoint live?";
+            document.getElementById(loadingId).innerText = "❌ Connection error.";
         }
     }
 
